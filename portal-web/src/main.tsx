@@ -29,6 +29,29 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Deploy probe — confirms this fork's image built & deployed successfully.
+// Remove once the DevOps build→deploy pipeline is verified.
+function DeployProbe() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        textAlign: "center",
+        fontSize: "11px",
+        lineHeight: "16px",
+        color: "#9ca3af",
+        pointerEvents: "none",
+        zIndex: 9999,
+      }}
+    >
+      glow-Kev1n fork · deploy probe OK
+    </div>
+  )
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ToastProvider>
   <ConfirmProvider>
@@ -58,6 +81,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       </Route>
     </Routes>
   </BrowserRouter>
+  <DeployProbe />
   </ConfirmProvider>
   </ToastProvider>
 )
