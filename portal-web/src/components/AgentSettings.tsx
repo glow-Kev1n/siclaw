@@ -361,13 +361,11 @@ function BasicTab({ name, setName, description, setDescription, systemPrompt, se
         <div className="flex items-center gap-2 text-[13px]">
           <span className="text-muted-foreground">Session persistence:</span>
           <span className="font-medium text-foreground">{persistenceEnabled ? "Enabled" : "Disabled"}</span>
-          <span className="text-[11px] text-muted-foreground/70">(locked at creation)</span>
         </div>
         <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
           {persistenceEnabled
-            ? "Conversations and agent memory are stored on a shared persistent volume — sessions survive pod restarts, so users can return to an earlier conversation and the agent still remembers it."
-            : "Conversations live only in the pod (ephemeral). When the pod restarts or the session idles out, the agent's context is cleared and a returning user starts fresh."}
-          {" "}This is fixed when the agent is created and cannot be changed afterward.
+            ? "PVC keeps the session context across pod restarts."
+            : "Session context is not retained."}
         </p>
       </div>
     </div>

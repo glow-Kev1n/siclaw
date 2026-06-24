@@ -158,7 +158,7 @@ export function Agents() {
             </button>
             <div>
               <label className="block text-sm font-medium">Session Persistence</label>
-              <p className="text-xs text-muted-foreground">On: conversations + memory live on a shared volume and survive pod restarts (diagnostic / long-running agents). Off: ephemeral — context is cleared when the pod restarts or the session idles out (stateless agents like shopping guides).</p>
+              <p className="text-xs text-muted-foreground">On: a PVC keeps the session context across pod restarts. Off: not retained. Set at creation.</p>
             </div>
           </div>
           <div className="flex gap-2">
