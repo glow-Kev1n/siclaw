@@ -164,7 +164,8 @@ export function AgentSettings({ agent, onUpdate, initialTab }: AgentSettingsProp
   const [fallbackCandidates, setFallbackCandidates] = useState<ModelRouteCandidateForm[]>([])
   const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt || "")
   const [isProduction, setIsProduction] = useState(agent.is_production)
-  const [persistenceEnabled, setPersistenceEnabled] = useState(!!agent.persistence_enabled)
+  // Read-only: persistence is anchored at agent creation and cannot be changed here.
+  const persistenceEnabled = !!agent.persistence_enabled
 
   // ── Data ──
   const [providers, setProviders] = useState<Provider[]>([])
@@ -195,7 +196,6 @@ export function AgentSettings({ agent, onUpdate, initialTab }: AgentSettingsProp
     setRoutingEnabled(modelRouting?.enabled === true)
     setFallbackCandidates(normalizeRouteCandidates(modelRouting, agent.model_provider || "", agent.model_id || ""))
     setSystemPrompt(agent.system_prompt || ""); setIsProduction(agent.is_production)
-    setPersistenceEnabled(!!agent.persistence_enabled)
   }, [agent])
 
   // Load data
@@ -251,7 +251,7 @@ export function AgentSettings({ agent, onUpdate, initialTab }: AgentSettingsProp
     try {
       const updated = await api<Agent>(`/agents/${agent.id}`, {
         method: "PUT",
-        body: { name: name.trim(), description: description.trim(), model_provider: modelProvider.trim(), model_id: modelId.trim(), model_routing: routingEnabled ? modelRouting : null, system_prompt: systemPrompt.trim(), is_production: isProduction, persistence_enabled: persistenceEnabled },
+        body: { name: name.trim(), description: description.trim(), model_provider: modelProvider.trim(), model_id: modelId.trim(), model_routing: routingEnabled ? modelRouting : null, system_prompt: systemPrompt.trim(), is_production: isProduction },
       })
       await api(`/agents/${agent.id}/resources`, {
         method: "PUT",
@@ -301,7 +301,7 @@ export function AgentSettings({ agent, onUpdate, initialTab }: AgentSettingsProp
 
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
-        {activeTab === "basic" && <BasicTab name={name} setName={setName} description={description} setDescription={setDescription} systemPrompt={systemPrompt} setSystemPrompt={setSystemPrompt} isProduction={isProduction} setIsProduction={setIsProduction} persistenceEnabled={persistenceEnabled} setPersistenceEnabled={setPersistenceEnabled} />}
+        {activeTab === "basic" && <BasicTab name={name} setName={setName} description={description} setDescription={setDescription} systemPrompt={systemPrompt} setSystemPrompt={setSystemPrompt} isProduction={isProduction} setIsProduction={setIsProduction} persistenceEnabled={persistenceEnabled} />}
         {activeTab === "model" && <ModelTab providers={providers} modelProvider={modelProvider} setModelProvider={setModelProvider} modelId={modelId} setModelId={setModelId} availableModels={availableModels} routingEnabled={routingEnabled} setRoutingEnabled={setRoutingEnabled} fallbackCandidates={fallbackCandidates} setFallbackCandidates={setFallbackCandidates} />}
         {activeTab === "skills" && <SkillsTab allSkills={allSkills} selectedSkillIds={selectedSkillIds} setSelectedSkillIds={setSelectedSkillIds} skillLabelFilter={skillLabelFilter} setSkillLabelFilter={setSkillLabelFilter} isProduction={isProduction} loading={loadingSkills || loadingResources} />}
         {activeTab === "mcp" && <McpTab allMcpServers={allMcpServers} selectedMcpIds={selectedMcpIds} setSelectedMcpIds={setSelectedMcpIds} loading={loadingMcp || loadingResources} />}
@@ -317,10 +317,10 @@ export function AgentSettings({ agent, onUpdate, initialTab }: AgentSettingsProp
 
 // ── Tab Components ──────────────────────────────────────
 
-function BasicTab({ name, setName, description, setDescription, systemPrompt, setSystemPrompt, isProduction, setIsProduction, persistenceEnabled, setPersistenceEnabled }: {
+function BasicTab({ name, setName, description, setDescription, systemPrompt, setSystemPrompt, isProduction, setIsProduction, persistenceEnabled }: {
   name: string; setName: (v: string) => void; description: string; setDescription: (v: string) => void
   systemPrompt: string; setSystemPrompt: (v: string) => void; isProduction: boolean; setIsProduction: (v: boolean) => void
-  persistenceEnabled: boolean; setPersistenceEnabled: (v: boolean) => void
+  persistenceEnabled: boolean
 }) {
   return (
     <div className="px-6 py-6 space-y-5 max-w-2xl">
@@ -357,25 +357,17 @@ function BasicTab({ name, setName, description, setDescription, systemPrompt, se
             : "Development agent operates on test environments only. Draft skills take effect immediately without approval — ideal for rapid skill development and validation."}
         </p>
       </div>
-      <div className="space-y-2 pt-2 border-t border-border">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={persistenceEnabled}
-            onClick={() => setPersistenceEnabled(!persistenceEnabled)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${persistenceEnabled ? "bg-primary" : "bg-muted-foreground/30"}`}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${persistenceEnabled ? "translate-x-6" : "translate-x-1"}`} />
-          </button>
-          <span className="text-[13px] font-medium text-foreground">
-            Session persistence {persistenceEnabled ? "on" : "off"}
-          </span>
+      <div className="space-y-1.5 pt-2 border-t border-border">
+        <div className="flex items-center gap-2 text-[13px]">
+          <span className="text-muted-foreground">Session persistence:</span>
+          <span className="font-medium text-foreground">{persistenceEnabled ? "Enabled" : "Disabled"}</span>
+          <span className="text-[11px] text-muted-foreground/70">(locked at creation)</span>
         </div>
         <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
           {persistenceEnabled
-            ? "Conversations and agent memory are stored on a shared persistent volume — sessions survive pod restarts, so users can return to an earlier conversation and the agent still remembers it. Recommended for diagnostic / long-running agents."
-            : "Conversations live only in the pod (ephemeral). When the pod restarts or the session idles out, the agent's context is cleared and a returning user starts fresh. Suitable for stateless agents like shopping guides."}
+            ? "Conversations and agent memory are stored on a shared persistent volume — sessions survive pod restarts, so users can return to an earlier conversation and the agent still remembers it."
+            : "Conversations live only in the pod (ephemeral). When the pod restarts or the session idles out, the agent's context is cleared and a returning user starts fresh."}
+          {" "}This is fixed when the agent is created and cannot be changed afterward.
         </p>
       </div>
     </div>

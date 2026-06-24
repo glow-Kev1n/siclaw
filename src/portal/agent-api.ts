@@ -151,10 +151,15 @@ export function registerAgentRoutes(
     const body = await parseBody<Record<string, unknown>>(req);
     const db = getDb();
 
-    // Build dynamic SET clause
+    // Build dynamic SET clause.
+    // NOTE: persistence_enabled is intentionally NOT updatable — it is anchored
+    // at agent creation (see create handler). A diagnostic agent always needs
+    // session persistence and a shopping-guide agent never does, so the flag is
+    // fixed for the agent's lifetime. Omitting it here also closes the
+    // direct-API bypass (UI shows it read-only).
     const fields = [
       "name", "description", "status", "model_provider",
-      "model_id", "system_prompt", "is_production", "persistence_enabled", "icon", "color",
+      "model_id", "system_prompt", "is_production", "icon", "color",
     ];
     const setClauses: string[] = [];
     const values: unknown[] = [];
