@@ -26,7 +26,7 @@ export function Agents() {
   const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ name: "", description: "", model_provider: "", model_id: "", is_production: true })
+  const [form, setForm] = useState({ name: "", description: "", model_provider: "", model_id: "", is_production: true, persistence_enabled: false })
   const [creating, setCreating] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
@@ -49,7 +49,7 @@ export function Agents() {
       const a = await api<Agent>("/agents", { method: "POST", body: form })
       setAgents((prev) => [...prev, a])
       setShowCreate(false)
-      setForm({ name: "", description: "", model_provider: "", model_id: "", is_production: true })
+      setForm({ name: "", description: "", model_provider: "", model_id: "", is_production: true, persistence_enabled: false })
     } catch (err: any) { toast.error(err.message) } finally { setCreating(false) }
   }
 
@@ -150,6 +150,15 @@ export function Agents() {
             <div>
               <label className="block text-sm font-medium">Production Agent</label>
               <p className="text-xs text-muted-foreground">Production agents only receive approved skills and can only access production clusters/hosts. Dev agents see draft skills and dev resources.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <button type="button" role="switch" aria-checked={form.persistence_enabled} onClick={() => setForm({ ...form, persistence_enabled: !form.persistence_enabled })} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors mt-0.5 ${form.persistence_enabled ? "bg-primary" : "bg-muted"}`}>
+              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${form.persistence_enabled ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
+            <div>
+              <label className="block text-sm font-medium">Session Persistence</label>
+              <p className="text-xs text-muted-foreground">On: conversations + memory live on a shared volume and survive pod restarts (diagnostic / long-running agents). Off: ephemeral — context is cleared when the pod restarts or the session idles out (stateless agents like shopping guides).</p>
             </div>
           </div>
           <div className="flex gap-2">
