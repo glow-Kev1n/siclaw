@@ -87,8 +87,8 @@ export function registerAgentRoutes(
     }
 
     await db.query(
-      `INSERT INTO agents (id, name, description, status, model_provider, model_id, model_routing, system_prompt, is_production, icon, color, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agents (id, name, description, status, model_provider, model_id, model_routing, system_prompt, is_production, persistence_enabled, icon, color, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         body.name,
@@ -99,6 +99,7 @@ export function registerAgentRoutes(
         modelRouting ?? null,
         body.system_prompt ?? null,
         body.is_production ?? 1,
+        body.persistence_enabled ? 1 : 0,
         body.icon ?? null,
         body.color ?? null,
         auth.userId,
@@ -153,7 +154,7 @@ export function registerAgentRoutes(
     // Build dynamic SET clause
     const fields = [
       "name", "description", "status", "model_provider",
-      "model_id", "system_prompt", "is_production", "icon", "color",
+      "model_id", "system_prompt", "is_production", "persistence_enabled", "icon", "color",
     ];
     const setClauses: string[] = [];
     const values: unknown[] = [];

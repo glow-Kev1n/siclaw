@@ -29,6 +29,8 @@ export interface ResolvedModelBinding {
     }>;
   };
   modelRouting?: ModelRoutePolicy;
+  /** Per-agent session/memory persistence toggle (agents.persistence_enabled). */
+  persistence?: boolean;
 }
 
 export async function resolveAgentModelBinding(
