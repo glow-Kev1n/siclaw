@@ -4,6 +4,10 @@
 > 基线：`origin/main` @ `f8ffe01`
 > 作者任务：让 PVC 持久化从「Runtime 进程级全局开关」下沉为「每个 agent 可单独配置」，并在 Portal 前端 agent 创建/编辑页暴露开关。
 > 本次范围：**仅 PVC 开关**。TTL、memory 等同类下沉留待后续（设计已为其预留扩展路径，见 §7）。
+>
+> **最终决策（与同事对齐）：PVC 设置在 agent 创建时锚定，创建后不可修改。** GPU cloud 的形态-需求是固定的（导购永不需要持久化、诊断永远需要），不存在中途切换的诉求。锚定后前端编辑页只读展示、后端 PUT 不接受该字段，并且彻底消除了「改开关需 pod 重建才生效」的边界问题（见 §6 R3）。"运行时动态改 PVC 并热同步到 agentbox" 作为未来展望保留（见 §7），当前需求完全不需要。
+>
+> **状态：已实现并验证闭环**（单测 + 集群失忆测试 + 后端锚定测试均通过）。
 
 ---
 
@@ -214,7 +218,7 @@ const claimName = this.config.persistence?.claimName ?? process.env.SICLAW_PERSI
 |---|---|---|
 | **R1** | `getOrCreate` 有多个调用点（prompt / channels / task-coordinator）。若只改 prompt 路径，其它路径走 spawner 默认，行为不一致。 | 本次统一策略：**所有调用点都不传时回退全局默认**，prompt 路径显式传 per-agent。需在文档明确：channel/task 触发的 spawn 是否也要 per-agent？建议一并改（取数逻辑相同）。 |
 | **R2** | per-agent 想开 PVC，但 Runtime 全局没建 PVC（无 claimName）→ 挂载失败 pod 起不来。 | spawner 加保护：`persistence=true` 但无可用 claimName 时 `console.warn` + 降级 emptyDir，不让 pod 挂死。 |
-| **R3** | pod 复用：`spawn` 对已 Running 的同名 pod 直接复用（k8s-spawner.ts:107-110），不会因配置变更重建。改了 agent 的 PVC 开关后，旧 pod 仍用旧配置。 | 文档说明：配置变更在**下次 pod 重建后生效**（或提供手动 terminate）。本次不做热重建。 |
+| **R3** | pod 复用：`spawn` 对已 Running 的同名 pod 直接复用（k8s-spawner.ts:107-110），不会因配置变更重建。曾担心"改了 PVC 开关后旧 pod 仍用旧挂载"。 | **已通过"创建时锚定"消除**：PVC 设置创建后不可改（前端只读 + 后端 PUT 不接受该字段），所以不存在"中途变更需 pod 重建生效"的情形——agent 自创建起行为恒定。若未来要支持运行时动态改，再处理热同步（见 §7）。 |
 | **R4** | 关闭持久化后，emptyDir 在 pod 销毁时回收 JSONL；但 siclaw 无代码主动删 JSONL。若 agent 从「开」改「关」，已在 PVC 上的旧数据不会被清理。 | 本次范围不含数据清理。文档标注为已知行为，后续可加 GC。 |
 | **R5** | 权限：create/PUT agent 是 admin-only（`requireAdmin`）。确认产品方配置 agent 的角色满足。 | 与 mentor 确认产品方账号权限模型。 |
 
@@ -232,17 +236,32 @@ const claimName = this.config.persistence?.claimName ?? process.env.SICLAW_PERSI
 
 `config.getAgentRuntimeConfig` RPC 的返回对象统一承载这些字段，无需新增 RPC。届时 `agent-runtime-config.ts` 和 adapter handler 各扩字段即可。
 
+### 7.1 展望：运行时动态修改 PVC 并热同步到 AgentBox（当前需求不需要）
+
+> ⚠️ 这是**远期设想，当前 GPU cloud 需求完全不需要**（设置已在创建时锚定，见头部决策）。仅记录思路，避免日后重复论证。
+
+如果未来出现"已创建的 agent 需要中途切换持久化"的诉求，难点不在改 DB（那很简单），而在**让变更同步到正在运行的 agentbox pod**。K8s 的约束是：**Pod 的 volume 挂载在创建时定死，运行中无法热改**。所以"动态生效"本质上绕不开一次 pod 重建。可选路径：
+
+1. **改配置时主动回收该 agent 的 pod**：PUT 接口在更新 `persistence_enabled` 后，调 spawner 删掉该 agent 当前的 agentbox pod；下次 `chat.send` 自然按新配置重建。代价：打断该 agent 正在进行的会话。
+2. **打开"可改"入口**：把本次锁掉的前端开关 + 后端 PUT 字段重新放开（代码里已有 per-agent 决策逻辑，放开即可），配合路径 1 的 pod 回收。
+3. **数据迁移问题**：`on→off` 后 PVC 上旧 JSONL 不会自动清（见 R4）；`off→on` 则从空开始。若要"切换时保留/迁移历史"，需要额外的 DB↔JSONL 迁移逻辑——但注意 DB 是脱敏有损投影，不能直接重建 JSONL（这是另一条已论证的死路，不要走）。
+
+**结论**：技术上可行，但要权衡"打断会话 + 数据迁移复杂度"，且与"形态固定"的产品现实不符。**保持锚定是当前最简洁正确的选择。**
+
 ---
 
 ## 8. 测试与验证
 
 - **单元/集成**：`npm test`（重点 `migrate-sqlite.test.ts`、`schema-invariants.test.ts`、`k8s-spawner.test.ts`、`manager.test.ts`、`agent-api` 相关）。
 - **类型**：`npx tsc --noEmit`。
-- **集群手测**（远程开发机 → pod）：
-  1. 建两个 agent：A `persistence_enabled=true`、B `false`。
-  2. 各发 prompt → `kubectl get pod` 看 A 的 pod volume 是 `persistentVolumeClaim`、B 是 `emptyDir`（`kubectl describe pod`）。
-  3. A：删 pod → 重发 prompt → 旧 session 上下文恢复；B：删 pod → 旧 session 丢失、新起 session。
-  4. 前端：创建/编辑页开关能正确保存与回显。
+- **集群手测**（远程开发机 → pod）—— ✅ 已执行并通过：
+  1. 建两个 agent：A（`pvc on`，persistence_enabled=1）、B（`pvc off`，=0）。
+  2. 各发 prompt → 看 pod volume：A = `persistentVolumeClaim: siclaw-data` + `subPath: agents/<id>`；B = `emptyDir`。✅ 实测一致。
+  3. 删两个 agentbox pod（模拟重启）→ 回原会话问"我最喜欢的数字"：**A 答得出（PVC 恢复 JSONL）、B 失忆**。✅ 通过。
+  4. **后端锚定**：直接 PUT `{persistence_enabled:0}` 到 A → 再查仍为 1。✅ 改不动。
+  5. 前端：新建弹窗有开关；编辑页只读展示状态（不可改）。
+
+  > 集群环境：StorageClass `csi-gpfs-test-1`（实测支持 RWX）；helm `agentbox.persistence.enabled=true` + `claimName=siclaw-data`（2Gi RWX）作为全局兜底 + claimName 来源。
 
 ---
 
