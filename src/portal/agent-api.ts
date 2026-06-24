@@ -113,8 +113,8 @@ export function registerAgentRoutes(
     }
 
     await db.query(
-      `INSERT INTO agents (id, name, description, status, model_provider, model_id, model_routing, tool_capabilities, system_prompt, is_production, idle_timeout_sec, icon, color, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agents (id, name, description, status, model_provider, model_id, model_routing, tool_capabilities, system_prompt, is_production, idle_timeout_sec, persistence_enabled, icon, color, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         body.name,
@@ -127,6 +127,7 @@ export function registerAgentRoutes(
         body.system_prompt ?? null,
         body.is_production ?? 1,
         normalizeIdleTimeoutSec(body.idle_timeout_sec),
+        body.persistence_enabled ? 1 : 0,
         body.icon ?? null,
         body.color ?? null,
         auth.userId,
@@ -178,7 +179,12 @@ export function registerAgentRoutes(
     const body = await parseBody<Record<string, unknown>>(req);
     const db = getDb();
 
-    // Build dynamic SET clause
+    // Build dynamic SET clause.
+    // NOTE: persistence_enabled is intentionally NOT updatable — it is anchored
+    // at agent creation (see create handler). A diagnostic agent always needs
+    // session persistence and a shopping-guide agent never does, so the flag is
+    // fixed for the agent's lifetime. Omitting it here also closes the
+    // direct-API bypass (UI shows it read-only).
     const fields = [
       "name", "description", "status", "model_provider",
       "model_id", "system_prompt", "is_production", "idle_timeout_sec", "icon", "color",

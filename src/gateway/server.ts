@@ -206,6 +206,9 @@ export async function startRuntime(opts: StartRuntimeOptions): Promise<RuntimeSe
     const modelRouting = params.modelRouting as PromptOptions["modelRouting"];
     const images = params.images as PromptOptions["images"];
     const files = params.files as PromptOptions["files"];
+    // Per-agent PVC persistence toggle (Portal resolves from agents.persistence_enabled).
+    // undefined when omitted (legacy callers) → spawner falls back to its global config.
+    const persistence = typeof params.persistence === "boolean" ? params.persistence : undefined;
     const promptOpts: PromptOptions = {
       sessionId,
       text,
@@ -246,7 +249,7 @@ export async function startRuntime(opts: StartRuntimeOptions): Promise<RuntimeSe
         await appendMessage({ sessionId, role: "user", content: text });
         await incrementMessageCount(sessionId);
 
-        const handle = await agentBoxManager.getOrCreate(agentId);
+        const handle = await agentBoxManager.getOrCreate(agentId, { persistence });
         const client = new AgentBoxClient(handle.endpoint, 30000, agentBoxTlsOptions);
 
         let promptResult: Awaited<ReturnType<typeof client.prompt>>;

@@ -31,6 +31,8 @@ export interface ResolvedModelBinding {
   modelRouting?: ModelRoutePolicy;
   /** Agent's custom system prompt template (agents.system_prompt). Null/absent = built-in default. */
   systemPrompt?: string | null;
+  /** Per-agent session/memory persistence toggle (agents.persistence_enabled). */
+  persistence?: boolean;
 }
 
 export async function resolveAgentModelBinding(
